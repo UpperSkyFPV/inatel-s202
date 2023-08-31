@@ -59,8 +59,8 @@ def main() -> None:
     db = Database(HOST, database="pokedex", collection="pokemons")
     print(f"{db=}")
 
-    # with open("dataset.json") as f:
-    #     db.reset_database(json.load(f))
+    with open("dataset.json") as f:
+        db.reset_database(json.load(f))
 
     pokedex = Pokedex(db)
     print(f"{pokedex=}")
