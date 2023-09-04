@@ -41,7 +41,7 @@ class ProductAnalyzer:
                     "$group": {
                         "_id": "$data_compra",
                         "total": {"$sum": "$produtos.quantidade"},
-                    },
+                    }
                 },
             ]
         )
