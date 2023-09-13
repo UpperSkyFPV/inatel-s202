@@ -1,0 +1,19 @@
+{
+  "$jsonSchema": {
+    "type": "object",
+    "properties": {
+      "titulo": {
+        "type": "string"
+      },
+      "autor": {
+        "type": "string"
+      },
+      "ano": {
+        "bsonType": "int"
+      },
+      "preco": {
+        "type": "number"
+      }
+    }
+  }
+}
