@@ -1,0 +1,2 @@
+- [ ] Add a way to index into dictionaries and arrays
+- [ ] Improve `cmd_find_books` to accept all _mongodb_ parameters (more than `filter`)

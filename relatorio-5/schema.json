@@ -1,6 +1,12 @@
 {
   "$jsonSchema": {
     "type": "object",
+    "required": [
+      "titulo",
+      "autor",
+      "ano",
+      "preco"
+    ],
     "properties": {
       "titulo": {
         "type": "string"

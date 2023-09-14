@@ -1,9 +1,23 @@
 import inspect
+import itertools
 import json
+import re
 import readline
-import shlex
-from typing import Any, Callable, Optional, Union, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Union, get_args, get_origin, get_type_hints
+
 from rich import print
+
+
+REGEX_STR = r"""(?:[^\s,"`'|]|"(?:\\.|[^"])*"|`(?:\\.|[^`])*`|'(?:\\.|[^'])*')+|\|"""
+REGEX = re.compile(REGEX_STR)
+
+
+def regex_lex(s: str) -> list[str]:
+    return REGEX.findall(s)
+
+
+def is_falsey_str(s: str) -> bool:
+    return s == "False" or s == "false" or s == ""
 
 
 class CliBase:
@@ -22,6 +36,19 @@ class CliBase:
     will generate a command `hello NAME` with full support for
     positional and keyword arguments (like `hello name=bob`)
     with **completion**!
+    Custom completion can also be implemented using a method like:
+    ```py
+    def completion_hello(
+        self,
+        sig: inspect.Signature,
+        state: int,
+        args: list[str],
+        kwargs: dict[str, str],
+    ) -> str | None:
+        return None
+    ```
+    View the example implementation for the `completion_help`
+    command and the `completer` method for help.
 
     Tips:
     - Running an empty command (just `ENTER` in the prompt) will
@@ -31,9 +58,10 @@ class CliBase:
     - Setting the `$SILENT` variable to `True` will disable some
       warnings, like:
       - Access to undefined variables
-    - Setting the `$CHATTY` variable to `True` will make so that
+    - Setting the `$DEBUG` variable to `True` will make so that
       every command's args and kwargs are printed before they are
       handed to the implementation function.
+    - Setting the `$PROMPT` variable will change the CLI prompt.
     """
 
     previous_command: str | None
@@ -45,10 +73,10 @@ class CliBase:
         self.previous_command = None
         self.last_result = None
         self.keep_running = True
-        self.env = {"SILENT": False, "CHATTY": False}
+        self.env = {"SILENT": False, "DEBUG": False, "PROMPT": "> "}
 
     def run(self):
-        """Run the REPL. Exit with `CTR+D`, `CTRL+C` or `exit`"""
+        """Run the REPL. Exit with `CTR+D` or `exit`. `CTRL+C` cancels the current prompt"""
         # setup readline for tab complete
         readline.parse_and_bind("tab: complete")
         # setup our custom completion function
@@ -59,22 +87,35 @@ class CliBase:
             # Read a line (using `readline` under the hood), checking for
             # `CTRL+D` and `CTRL+C`.
             try:
-                line = input("> ")
-            except (EOFError, KeyboardInterrupt):
+                line = input(self.env.get("PROMPT", "> "))
+            except EOFError:
                 break
+            except KeyboardInterrupt:
+                print()
+                continue
 
             # parse the arguments
-            args, kwargs, _ = self.parse_argv(line)
+            commands = self.parse_argv(line)
+            if self.env.get("DEBUG", False):
+                print("commands:", commands)
 
             # re-run the last command on empty input
-            if len(args) == 0:
+            if len(commands) == 0:
                 if self.previous_command is not None:
-                    args, kwargs, _ = self.parse_argv(self.previous_command)
+                    commands = self.parse_argv(self.previous_command)
                 else:
                     continue
 
-            # save what was the return code of the command and the actual line executed
-            self.last_result = self.exec(args, kwargs)
+            for idx, (args, kwargs, _) in enumerate(commands):
+                if len(args) == 0:
+                    self.pwarn("Trailing piping found in command")
+                    break
+
+                # save what was the return code of the command and the actual line executed
+                self.last_result = self.exec(args, kwargs, idx > 0)
+
+            print(f"< {repr(self.last_result)}")
+
             self.previous_command = line
 
         print("\nbye!")
@@ -103,7 +144,11 @@ class CliBase:
             return root_complete()
 
         # parse the arguments as they are
-        args, kwargs, last_was_kw = self.parse_argv(line, True)
+        commands = self.parse_argv(line, True)
+        if len(commands) == 0:
+            return root_complete()
+
+        args, kwargs, last_was_kw = commands[-1]
         if len(args) == 0:
             return root_complete()
 
@@ -120,6 +165,9 @@ class CliBase:
         # inspect the method and do a lot of checks to make completion for
         # the arguments to the command
         sig = inspect.signature(m)
+        if (a := getattr(self, f"completion_{cmd}", None)) is not None:
+            return a(sig, state, args, kwargs)
+
         argnames = [
             arg.name for arg in sig.parameters.values() if arg.name not in kwargs
         ]
@@ -133,11 +181,25 @@ class CliBase:
             if value == "":
                 return None
 
-            if state < len(argnames):
-                return argnames[state]
+            if value.startswith("$"):
+                keys = [
+                    k for k in (f"${i}" for i in self.env.keys()) if k.startswith(value)
+                ]
+                if state < len(keys):
+                    return keys[state][1:]
+                return None
+
+            # if state < len(argnames):
+            #     return argnames[state]
             return None
 
         key = args[-1] if len(args) > 0 else ""
+        if key.startswith("$"):
+            keys = [k for k in (f"${i}" for i in self.env.keys()) if k.startswith(key)]
+            if state < len(keys):
+                return keys[state][1:]
+            return None
+
         idx = len(args) - 1 if len(args) > 0 else 0
         argnames = [a for a in argnames[idx:] if line[-1] == " " or a.startswith(key)]
         if state < len(argnames):
@@ -146,42 +208,52 @@ class CliBase:
 
     def parse_argv(
         self, line: str, silent=False
-    ) -> tuple[list[str], dict[str, str], bool]:
+    ) -> list[tuple[list[str], dict[str, str], bool]]:
         """Returns a tuple with:
         - positional arguments
         - keyword arguments
         - if the last parsed argument was keyword argument"""
-        s = shlex.split(line)
+        words = regex_lex(line)
+        out: list[tuple[list[str], dict[str, str], bool]] = []
 
-        args = []
-        kwargs = {}
-        last_was_kw = False
+        for cmd in (
+            value
+            for key, value in itertools.groupby(words, lambda z: z == "|")
+            if not key
+        ):
+            args = []
+            kwargs = {}
+            last_was_kw = False
 
-        for part in s:
-            eq = part.split("=")
-            # print(f"{eq=}")
-            match eq:
-                case [s]:
-                    args.append(s)
-                    if len(kwargs) > 0 and not silent:
-                        self.perror(
-                            "Positional parameters should be before keyword parameters"
-                        )
-                    last_was_kw = False
-                case ["", _]:
-                    args.append(part)
-                    last_was_kw = True
-                case [lhs, rhs]:
-                    kwargs[lhs] = rhs
-                    last_was_kw = True
+            for part in cmd:
+                eq = part.split("=")
+                # print(f"{eq=}")
+                match eq:
+                    case [s]:
+                        args.append(s)
+                        if len(kwargs) > 0 and not silent:
+                            self.perror(
+                                "Positional parameters should be before keyword parameters"
+                            )
+                        last_was_kw = False
+                    case ["", _]:
+                        args.append(part)
+                        last_was_kw = True
+                    case [lhs, rhs]:
+                        kwargs[lhs] = rhs
+                        last_was_kw = True
 
-        return args, kwargs, last_was_kw
+            out.append((args, kwargs, last_was_kw))
+
+        return out
 
     def get_method(self, name: str) -> Callable | None:
         """Get a method by it's command name"""
         return getattr(self, f"cmd_{name}", None)
 
-    def apply_args(self, method: Callable, args: list[str], kwargs: dict[str, str]):
+    def apply_args(
+        self, method: Callable, args: list[str], kwargs: dict[str, str], is_piped: bool
+    ):
         """Transform the arguments to the correct types expected by the function.
 
         This is where we substitute variables (with `$"name"`) and the `_` special value
@@ -191,19 +263,60 @@ class CliBase:
         conv_args = []
         conv_kwargs = {}
 
-        def convert_type(key: str, ty, arg):
-            """Perform substitution and conversion to the target type of the command"""
-            # the result of the last command
-            if arg == "_":
-                arg = self.last_result
+        had_underscore = False
 
-            # variables
-            elif len(arg) > 0 and arg[0] == "$":
+        def any_startswith(v, s) -> bool:
+            if isinstance(v, str):
+                return v.startswith(s)
+            return False
+
+        def cleanup_type(arg):
+            """Perform substitution and convert to inferred type"""
+            nonlocal had_underscore
+
+            if arg == "_":
+                # the result of the last command
+                arg = self.last_result
+                had_underscore = True
+            elif any_startswith(arg, "$"):
+                # variables
                 value = self.env.get(arg[1:], None)
                 if value is None and not self.env.get("SILENT", False):
                     self.pwarn(f"undefined variable '{arg}'")
 
                 arg = value
+            elif (
+                any_startswith(arg, '"')
+                or any_startswith(arg, "'")
+                or any_startswith(arg, "`")
+            ):
+                # explicit strings
+                arg = arg[1:-1]
+            elif any_startswith(arg, "^"):
+                # json thing
+                arg = arg[1:]
+                if (
+                    any_startswith(arg, '"')
+                    or any_startswith(arg, "'")
+                    or any_startswith(arg, "`")
+                ):
+                    arg = arg[1:-1]
+                print(arg)
+                arg = json.loads(arg)
+            elif is_falsey_str(arg):
+                # convert to boolean
+                arg = False
+            elif isinstance(arg, str) and arg.isnumeric():
+                # convert to int
+                arg = int(arg)
+
+            return arg
+
+        def convert_type(key: str, ty, arg):
+            """Perform substitution and conversion to the target type of the command"""
+            nonlocal had_underscore
+
+            arg = cleanup_type(arg)
 
             try:
                 if get_origin(ty) is Union:
@@ -220,35 +333,44 @@ class CliBase:
             return arg
 
         for key, kwarg in kwargs.items():
-            if key not in hints:
+            key = cleanup_type(key)
+            if str(key) not in hints:
                 continue
 
-            ty = hints.pop(key)
+            ty = hints.pop(str(key))
             # print(f"{key=}, {kwarg=}: {ty=} {type(ty)=}")
 
-            conv = convert_type(key, ty, kwarg)
+            conv = convert_type(str(key), ty, kwarg)
             conv_kwargs[key] = conv
 
         for idx, (arg, (key, ty)) in enumerate(zip(args, hints.items())):
             # print(f"{key=}, {arg=}: {ty=} {type(ty)=}")
             conv_args.append(convert_type(f"position {idx}", ty, arg))
 
+        if not had_underscore and is_piped:
+            conv_args.append(self.last_result)
+
         return conv_args, conv_kwargs
 
-    def exec(self, args: list[str], kwargs: dict[str, str]):
+    def exec(self, args: list[str], kwargs: dict[str, str], is_piped: bool):
         name = args.pop(0)
         method = self.get_method(name)
         if method is None or not callable(method):
             return self.unknown_command(name)
 
-        try:
-            args, kwargs = self.apply_args(method, args, kwargs)
+        if self.env.get("DEBUG", False):
+            print("method:", inspect.signature(method))
 
-            if self.env.get("CHATTY", False):
-                print(args, kwargs)
-            r = method(*args, **kwargs)
-            print(f"< {r}")
-            return r
+        try:
+            if self.env.get("DEBUG", False):
+                print("raw:", args, kwargs)
+
+            args, kwargs = self.apply_args(method, args, kwargs, is_piped)
+
+            if self.env.get("DEBUG", False):
+                print("parsed:", args, kwargs)
+
+            return method(*args, **kwargs)
         except (TypeError, ValueError) as e:
             self.perror(f"{e}")
         except Exception as e:
@@ -274,7 +396,7 @@ class CliBase:
         """Remove the `cmd_` from the given function name"""
         return name[len("cmd_") :]
 
-    def cmd_help(self, name: Optional[str] = None):
+    def cmd_help(self, name: str | None = None):
         """Get help for how to use the CLI"""
         if name is None:
             print("Available commands:")
@@ -309,6 +431,26 @@ class CliBase:
 
         help(method)
 
+    def completion_help(
+        self,
+        sig: inspect.Signature,
+        state: int,
+        args: list[str],
+        kwargs: dict[str, str],
+    ) -> str | None:
+        if len(args) <= 1:
+            arg = args[-1] if len(args) > 0 else ""
+            commands = [
+                d
+                for d in (self.get_usable_name(c) for c in self.list_commands())
+                if d.startswith(arg)
+            ]
+            if state < len(commands):
+                return commands[state]
+            return None
+
+        return None
+
     def cmd_inspect(self, name: str):
         """Use `get_type_hints` to inspect a command."""
         method = self.get_method(name)
@@ -324,7 +466,8 @@ class CliBase:
         return value
 
     def cmd_echo(self, value: Any):
-        """Echo the value that it is given"""
+        """Print the value and also return it"""
+        print(value)
         return value
 
     def cmd_dumpenv(self):
@@ -333,15 +476,38 @@ class CliBase:
 
     def cmd_saveenv(self, name="env.json"):
         """Save the current environment to a json file"""
-        with open(name, 'w') as f:
-            json.dump(self.env, f)
+
+        def _default(obj):
+            try:
+                from bson.objectid import ObjectId
+
+                if isinstance(obj, ObjectId):
+                    return str(obj)
+            except ImportError:
+                pass
+            raise ValueError(f"Object {type(obj)} is not json serializable")
+
+        with open(name, "w") as f:
+            json.dump(self.env, f, default=_default)
 
         return name
 
+    def cmd_loadenv(self, name="env.json", overwrite=False):
+        """Load an environment and set it as current. If `overwrite` is
+        `False`, then merges with current environment"""
+        with open(name) as f:
+            env = json.load(f)
+
+        if overwrite:
+            self.env = env
+        else:
+            # python 3.9
+            self.env = self.env | env
+
     def cmd_test(self, value: Any) -> bool:
         """Given any value, will try to convert it to a boolean.
-        The only "false's" are empty strings and `False`"""
-        if value == "False" or value == "":
+        The only "false's" are empty strings, `false` and `False`"""
+        if value == "False" or value == "false" or value == "":
             return False
 
         return True
