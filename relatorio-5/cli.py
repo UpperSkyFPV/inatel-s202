@@ -8,8 +8,10 @@ from typing import Any, Callable, Union, get_args, get_origin, get_type_hints
 from rich import print
 
 
-REGEX_STR = r"""(?:[^\s,"`'|]|"(?:\\.|[^"])*"|`(?:\\.|[^`])*`|'(?:\\.|[^'])*')+|\|"""
+REGEX_STR = r"""(?:[^\s"`'|]|"(?:\\.|[^"])*"|`(?:\\.|[^`])*`|'(?:\\.|[^'])*')+|\|"""
 REGEX = re.compile(REGEX_STR)
+
+VarArgs = tuple[Any, ...]
 
 
 def regex_lex(s: str) -> list[str]:
@@ -62,12 +64,17 @@ class CliBase:
       every command's args and kwargs are printed before they are
       handed to the implementation function.
     - Setting the `$PROMPT` variable will change the CLI prompt.
+    - Strings can use the following caracters as delimiters: `"`,
+      `'` and ```
+    - The `^` prefix enters _json_ mode, so that the following
+      WORD (joined characters or quoted string) will be parsed as
+      json.
     """
 
     previous_command: str | None
     last_result: Any
     keep_running: bool
-    env: dict[str, Any]
+    env: dict[Any, Any]
 
     def __init__(self) -> None:
         self.previous_command = None
@@ -318,11 +325,14 @@ class CliBase:
 
             arg = cleanup_type(arg)
 
+            if self.env.get("DEBUG", False):
+                print(f"{arg=}: {ty=}")
+
             try:
                 if get_origin(ty) is Union:
                     ty = get_args(ty)[0]
                     return ty(arg)
-                if ty is Any:
+                if ty is Any or get_origin(ty) is tuple:
                     return arg
 
                 if callable(ty):
@@ -346,6 +356,9 @@ class CliBase:
         for idx, (arg, (key, ty)) in enumerate(zip(args, hints.items())):
             # print(f"{key=}, {arg=}: {ty=} {type(ty)=}")
             conv_args.append(convert_type(f"position {idx}", ty, arg))
+
+        if len(conv_args) < len(args):
+            conv_args += args[len(conv_args):]
 
         if not had_underscore and is_piped:
             conv_args.append(self.last_result)
@@ -464,6 +477,40 @@ class CliBase:
         """Set a variable in the env to some value"""
         self.env[key] = value
         return value
+
+    def cmd_idx(self, d: list[Any], *idxs: int) -> Any | None:
+        """Get a value from the given list.
+        Returns on the first `non-list` item that it gets.
+        If no indexes are given, then retuns the input dictionary.
+
+        Examples:
+            - `get ^[0,[1,2]] 0` will output `0`.
+            - `get ^[0,[1,2]] 1 0` will output `1`.
+            - `get ^[0,[1,2]] 1 0 12` will output `1` as well.
+        """
+
+        for idx in idxs:
+            d = d[idx]
+            if not isinstance(d, list):
+                break
+
+        return d
+
+    def cmd_key(self, d: dict[Any, Any], *keys: VarArgs) -> Any | None:
+        """Get a value from the given dictionary.
+        Returns on the first `non-dictionary` item that it gets.
+        If no keys are given, then retuns the input dictionary.
+
+        Examples:
+            - `get ^{"a":0} a` will output `0`.
+            - `get ^{"a":0} a b` will output `0` as well.
+        """
+        for key in keys:
+            d = d.get(key, None)
+            if not isinstance(d, dict):
+                break
+
+        return d
 
     def cmd_echo(self, value: Any):
         """Print the value and also return it"""
