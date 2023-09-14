@@ -58,8 +58,10 @@ class Books:
         r = self.db.collection.delete_one({"_id": ObjectId(id)})
         return r.acknowledged
 
-    def find(self, filter: dict[str, Any] = {}) -> list[Book]:
-        return list(self.db.collection.find(filter))
+    def find(
+        self, filter: dict[str, Any] = {}, projection: dict[str, Any] = {}
+    ) -> list[Book]:
+        return list(self.db.collection.find(filter, projection))
 
 
 class Cli(CliBase):
@@ -84,14 +86,14 @@ class Cli(CliBase):
         year: int | None = None,
         price: float | None = None,
     ):
-        """Update the value of book. Fields that are not provided are not touched"""
+        """Update the value of book. Fields that are not provided are not touched."""
         try:
             return self.books.update(id, title, author, year, price)
         except mongo_errors.WriteError as e:
             print(e)
 
     def cmd_read_book(self, id: str | ObjectId):
-        """Read the value of a book using it's `_id`"""
+        """Read the value of a book using it's `_id`."""
         try:
             return self.books.read(id)
         except mongo_errors.WriteError as e:
@@ -105,7 +107,7 @@ class Cli(CliBase):
             print(e)
 
     def cmd_find_books(self, filter: dict[str, Any] = {}):
-        """List all books in the database. A custom mongodb compliant filter can be given"""
+        """List all books in the database. A custom mongodb compliant filter and collation can be given."""
         try:
             return self.books.find(filter)
         except mongo_errors.WriteError as e:

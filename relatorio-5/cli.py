@@ -358,7 +358,7 @@ class CliBase:
             conv_args.append(convert_type(f"position {idx}", ty, arg))
 
         if len(conv_args) < len(args):
-            conv_args += args[len(conv_args):]
+            conv_args += args[len(conv_args) :]
 
         if not had_underscore and is_piped:
             conv_args.append(self.last_result)
@@ -412,6 +412,7 @@ class CliBase:
     def cmd_help(self, name: str | None = None):
         """Get help for how to use the CLI"""
         if name is None:
+            print("Use `help Self` to get more general help about the CLI.")
             print("Available commands:")
 
             def pretty_type(t: Any) -> str:
@@ -436,6 +437,9 @@ class CliBase:
                     f"- {name}({', '.join(params)}) -> {pretty_type(sig.return_annotation)}"
                 )
             return
+
+        if name == "Self":
+            help(self)
 
         method = self.get_method(name)
         if method is None:
