@@ -1,0 +1,50 @@
+{
+  "type": "object",
+  "properties": {
+    "nota": {
+      "type": "number"
+    },
+    "corridas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nota": {
+            "type": "number"
+          },
+          "distancia": {
+            "type": "number"
+          },
+          "valor": {
+            "type": "number"
+          },
+          "passageiro": {
+            "type": "object",
+            "properties": {
+              "nome": {
+                "type": "string"
+              },
+              "documento": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "nome",
+              "documento"
+            ]
+          }
+        },
+        "required": [
+          "nota",
+          "distancia",
+          "valor",
+          "passageiro"
+        ]
+      }
+    }
+  },
+  "required": [
+    "corridas",
+    "nota"
+  ]
+}
