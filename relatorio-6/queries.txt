@@ -1,0 +1,60 @@
+// CRIAÇÃO DE JURADOS, GAMES
+
+CREATE(j:Jurado{nome:'Bruno'});
+CREATE(j:Jurado{nome:'Lang'});
+CREATE(j:Jurado{nome:'Davi'});
+
+
+CREATE(g:Game{titulo:'Devour',genero:'Terror',ano:2020});
+CREATE(g:Game{titulo:'Minecraft',genero:'Sandbox',ano:2011});
+CREATE(g:Game{titulo:'Phasmophobia',genero:'Terror',ano:2020});
+CREATE(g:Game{titulo:'Warzone',genero:'Shooter',ano:2019});
+
+CREATE(l:Loja{nome:'Steam'});
+CREATE(l:Loja{nome:'Xbox'});
+CREATE(l:Loja{nome:'Battlenet'});
+
+// RELAÇÃO ENTRE JURADOS E GAMES
+
+MATCH(j:Jurado{nome:'Bruno'}),(g:Game{titulo:'Devour'})
+CREATE(j)-[:JOGOU{nota:10, horas:500}]->(g);
+
+MATCH(j:Jurado{nome:'Bruno'}),(g:Game{titulo:'Warzone'})
+CREATE(j)-[:JOGOU{nota:10, horas: 1000}]->(g);
+
+MATCH(j:Jurado{nome:'Lang'}),(g:Game{titulo:'Devour'})
+CREATE(j)-[:JOGOU{nota:6, horas: 156}]->(g);
+
+MATCH(j:Jurado{nome:'Lang'}),(g:Game{titulo:'Phasmophobia'})
+CREATE(j)-[:JOGOU{nota:7, horas: 200}]->(g);
+
+MATCH(j:Jurado{nome:'Lang'}),(g:Game{titulo:'Minecraft'})
+CREATE(j)-[:JOGOU{nota:9, horas: 10000}]->(g);
+
+MATCH(j:Jurado{nome:'Davi'}),(g:Game{titulo:'Minecraft'})
+CREATE(j)-[:JOGOU{nota:10, horas: 12000}]->(g);
+
+MATCH(j:Jurado{nome:'Davi'}),(g:Game{titulo:'Phasmophobia'})
+CREATE(j)-[:JOGOU{nota:5, horas: 2}]->(g);
+
+// QUESTAO 1
+match (n) return n;
+match (n:Game) where n.ano > 2012 return n;
+match (n:Game) where n.genero = 'Terror' return n;
+match () -[j:JOGOU]-> (g:Game) where j.nota >= 7 return g;
+
+// QUESTAO 2
+CREATE(g:Game{titulo:'Candy Crush',genero:'Raciocinio',ano:2012});
+CREATE(g:Game{titulo:'Hill Climb',genero:'Corrida',ano:2012});
+CREATE(g:Game{titulo:'Temple Run',genero:'Corrida',ano:2011});
+
+CREATE(j:Jurado{nome:'Bob'});
+CREATE(j:Jurado{nome:'John'});
+CREATE(j:Jurado{nome:'Doe'});
+
+MATCH(j:Jurado{nome:'Bob'}),(g:Game{titulo:'Candy Crush'})
+CREATE(j)-[:JOGOU{nota:8, horas: 10034}]->(g);
+MATCH(j:Jurado{nome:'John'}),(g:Game{titulo:'Hill Climb'})
+CREATE(j)-[:JOGOU{nota:5, horas: 320}]->(g);
+MATCH(j:Jurado{nome:'Doe'}),(g:Game{titulo:'Temple Run'})
+CREATE(j)-[:JOGOU{nota:4, horas: 402}]->(g);
