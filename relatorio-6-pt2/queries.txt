@@ -1,0 +1,19 @@
+match (n:BankAccount) return count(*)
+match (n:BankAccount) return sum(n.balance)
+match (n:BankCard) return avg(n.balance)
+match (n:MoneyTransfer) return min(n.amount)
+match (n:MoneyTransfer) return max(n.amount)
+match (n:IP) return collect(n.ip)
+
+match (n:Purchase) return round(n.amount)
+match (n:BankCard) return floor(n.limit)
+match (n:BankAccount) return ceil(n.balance)
+match (n:BankAccount) return sign(n.balance)
+match (n:MoneyTransfer) return n.amount + rand()
+
+match (n:Shop) return split(n.business, ' ')
+match (n:Shop) return reverse(n.name)
+match (n:AccountHolder) return tolower(n.fullName)
+match (n:AccountHolder) return toupper(n.firstName)
+match (n:MoneyTransfer) return tostring(n.amount)
+
