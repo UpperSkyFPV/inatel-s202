@@ -17,6 +17,17 @@ Para se executar o programa (`python3 main.py`) é preciso ter instalado:
 
 Ambos podem ser instalados com `pip` usando os nomes acima.
 
+Ainda é preciso ter um arquivo `.secret` no diretório, contendo os dados para
+acesso ao banco *Neo4J* no formato:
+
+```json
+{
+  "host": "neo4j+s://<id>.databases.neo4j.io:7687",
+  "username": "neo4j",
+  "password": "¯\_(ツ)_/¯",
+}
+```
+
 ### Exemplo 1
 
 O programa conta com um menu de ajuda extensivo. O nome de todos os comandos

@@ -1,9 +1,11 @@
+import json
 from dataclasses import dataclass
 from typing import Callable, Optional, TypeVar
 
 from neo4j import Driver, GraphDatabase, ManagedTransaction
 from rich.console import Console
 from rich.table import Table
+
 from cli import CliBase
 
 c = Console()
@@ -633,11 +635,9 @@ def main() -> None:
     c.log("starting")
 
     with open(".secret") as f:
-        password = f.read().strip()
+        opt = json.load(f)
 
-    db = Database.connect(
-        "neo4j+s://54129c6f.databases.neo4j.io:7687", "neo4j", password
-    )
+    db = Database.connect(opt["host"], opt["username"], opt["password"])
     c.log("connected to database")
 
     cli = Cli(c, db)
