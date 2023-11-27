@@ -1,0 +1,95 @@
+#left-dock {
+    dock: left;
+    width: 30%;
+}
+
+.bordered-loading-indicator {
+    border: $primary;
+}
+
+NewPostWidget {
+    border: white;
+    padding: 0 1;
+}
+
+NewPostWidget TextArea {
+    height: 5;
+    margin: 1 1;
+}
+
+NewPostWidget Button {
+    width: 100%;
+}
+
+PostWidget {
+    border: white;
+}
+
+PostWidget .title {
+    padding-left: 1;
+    align: left top;
+    text-style: bold;
+}
+
+PostWidget Horizontal {
+    width: 100%;
+    height: 2;
+}
+
+PostWidget .author {
+    padding-right: 1;
+    align: right top;
+    text-align: right;
+    text-style: italic;
+}
+
+PostWidget .like_container {
+    layout: horizontal;
+    height: auto;
+    width: 100%;
+    align: right middle;
+}
+
+/*
+PostWidget {
+    border: white;
+    layout: grid;
+    grid-size: 2 3;
+}
+
+PostWidget Checkbox {
+}
+
+PostWidget Markdown {
+    column-span: 2;
+}
+*/
+
+FollowingWidget {
+    border: $primary;
+}
+
+FollowingWidget .info_center {
+    color: $secondary;
+    text-align: center;
+}
+
+FollowingUserWidget {
+    layout: grid;
+    grid-size: 2 1;
+
+    border: white;
+    padding: 0 1;
+}
+
+FollowingUserWidget LoadingIndicator {
+    align: right middle;
+}
+
+FollowingUserWidget .username {
+    text-style: bold;
+}
+
+FollowingUserWidget .followers {
+    text-align: right;
+}
