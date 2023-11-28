@@ -129,7 +129,11 @@ class Cli(CliBase):
         )
         for post in posts:
             table.add_row(
-                post.id, post.author.name, str(post.likes), post.title, post.contents
+                post.id,
+                post.author.name,
+                str(len(post.likes)),
+                post.title,
+                post.contents,
             )
 
         c.print(table)
